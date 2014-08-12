@@ -1,9 +1,9 @@
 {
-    "name": "swarm-tasks",
+    "name": "task-swarm",
     "version": "0.1.0",
     "repository": {
         "type": "git",
-        "url": "http://github.com/Oxygem/SwarmTasks.js"
+        "url": "http://github.com/Oxygem/TaskSwarm.js"
     },
     "dependencies": {
         "netev": ">=0.9.4",

@@ -33,6 +33,11 @@ var monitor = new Swarm.Monitor({
 ```
 
 
+## Example
+
+Checkout the `example/` directory for a full, ready-to-add-tasks-and-go example.
+
+
 ## Structure
 
 + N workers which do the tasks
