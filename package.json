@@ -1,0 +1,13 @@
+{
+    "name": "swarm-tasks",
+    "version": "0.1.0",
+    "repository": {
+        "type": "git",
+        "url": "http://github.com/Oxygem/SwarmTasks.js"
+    },
+    "dependencies": {
+        "netev": ">=0.9.4",
+        "redis": ">=0.10.0",
+        "colors": ">=0.6.2"
+    }
+}
