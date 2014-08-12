@@ -1,4 +1,4 @@
-# SwarmTasks.js
+# TaskSwarm.js
 
 Swarm-like distributed tasks for Node. Any number of workers "swarming" a centralised Redis store with some auxiliary monitors keeping an eye on things. Ready to survive worker, Redis and monitor failure - and _somewhat_ resiliant to network partitions.
 
