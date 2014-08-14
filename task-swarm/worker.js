@@ -59,20 +59,13 @@ var Worker = function(config) {
     this.redis.on('error', function(err) {
         if(this.redis_up) {
             this.redis_up = false;
-            setTimeout(function() {
-                utils.pingAllWorkers.call(this, function(percentage) {
-                    if(percentage < this.config.partitionPercentage) {
-                        this.stopAllTasks();
-                    } else {
-                        utils.log.call(this, percentage + '% of workers accessible, not pausing');
-                    }
-                }.bind(this));
-            // HORRIBLE HACK
-            // without this, we basically spam connections on Redis down
-            // nothing particularly negative, but pointless bandwidth
-            // need: a way for independant workers to cooperate when Redis is down
-            // maybe: give all workers a unique timeout, shared via Redis like the list?
-            }.bind(this), Math.random() * 1000);
+            utils.pingAllWorkers.call(this, function(percentage) {
+                if(percentage < this.config.partitionPercentage) {
+                    this.stopAllTasks();
+                } else {
+                    utils.log.call(this, percentage + '% of workers accessible, not pausing');
+                }
+            }.bind(this));
         }
         utils.error.call(this, 'Redis Error', err);
     }.bind(this));
@@ -85,7 +78,6 @@ var Worker = function(config) {
         // Assign internally once they identify
         worker.on('worker-identify', function(hostport) {
             worker.emit('worker-identify', this.config.host + ':' + this.config.port);
-            this.worker_connections[hostport] = worker;
 
             // Reply to pings
             worker.on('ping', function() {

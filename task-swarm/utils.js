@@ -96,6 +96,7 @@ var utils = {
         };
 
         var pingWorker = function(worker) {
+            console.log('pinging', worker);
             worker.emit('ping');
 
             var resultCallback = function() {
@@ -131,7 +132,8 @@ var utils = {
                 worker_connection.emit(this.type + '-identify', this.config.host + ':' + this.config.port);
 
                 // When we get their identify, ping
-                worker_connection.on('worker-identify', function() {
+                worker_connection.on('worker-identify', function(hostport) {
+                    this.worker_connections[hostport] = worker_connection;
                     pingWorker(worker_connection);
                     utils.log.call(this, 'Connected to worker: ' + host + ':' + port);
                 }.bind(this));
