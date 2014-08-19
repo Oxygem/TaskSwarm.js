@@ -6,6 +6,7 @@ var fs = require('fs'),
 
 var monitor = new Swarm.Monitor({
     debug: true,
+    debug_netev: true,
     redis: {
         host: 'localhost',
         port: 6379
