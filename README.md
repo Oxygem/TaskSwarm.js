@@ -9,14 +9,16 @@ Swarm-like distributed tasks for Node. Any number of workers "swarming" a centra
 
 ```js
 var worker = new Swarm.Worker({
-    debug_netev: true,
-    debug: true,
     host: 'localhost',
     port: 6000,
     redis: {
         host: 'localhost',
         port: 6379
-    }
+    },
+    // Optional + defaults:
+    fetchTaskInterval: 5000,
+    fetchWorkerInterval: 15000,
+    partitionPercentage: 60
 });
 ```
 
@@ -24,11 +26,14 @@ var worker = new Swarm.Worker({
 
 ```js
 var monitor = new Swarm.Monitor({
-    debug: true,
     redis: {
         host: 'localhost',
         port: 6379
-    }
+    },
+    // Optional + defaults:
+    checkTaskInterval: 15000,
+    fetchWorkerInterval: 15000,
+    partitionPercentage: 60
 });
 ```
 
@@ -45,6 +50,14 @@ Checkout the `example/` directory for a full, ready-to-add-tasks-and-go example.
 + Redis as a global state store
 
 
+## Redis Data
+
++ New tasks are pushed onto list/queue `new-task`
++ Active task id's in a set `tasks`
++ Active task data in relevant hash `task-<task_id>` (`state`, `start`, `update`, `worker` & `data` keys)
++ Ended tasks for manual cleanuo (hash remains) in set `end-task`
+
+
 ## Failover/HA/Fault-Tolerance Notes
 
 + Workers listed in Redis, but all keep copy in-memory
@@ -54,3 +67,7 @@ Checkout the `example/` directory for a full, ready-to-add-tasks-and-go example.
 + Ultimately not very tolerant of larger numbers of workers & complicated partitions
 + But should be solid in small groups
 + Redis cluster (untested) may be of use
+
+**partitionPercentage** - means "the min. % of other workers a worker/monitor has to ping to remain active when Redis goes down".
+
+Basically a choice of consitency vs partition resiliance. The lower the percentage the more resiliant the swarm is to network dropouts, however it's also more likely tasks get duplicated during partitions. A high percentage will mean better task consistency, but you'll be less resiliant to network partitions.
