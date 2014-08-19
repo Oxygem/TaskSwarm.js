@@ -1,5 +1,5 @@
 // TaskSwarm
-// File: utils.js
+// File: task-swarm/utils.js
 // Desc: utility/shared functions!
 
 'use strict';
@@ -135,7 +135,12 @@ var utils = {
             connection.on('connect', function() {
                 var worker_connection = netev(connection, this.config.debug_netev);
                 // Immediately identify
-                worker_connection.emit(this.type + '-identify', this.config.host + ':' + this.config.port);
+                if(this.type == 'worker') {
+                    worker_connection.emit('worker-identify', this.config.host + ':' + this.config.port);
+                } else {
+                    worker_connection.emit('monitor-identify');
+                }
+
 
                 // When we get their identify, ping
                 worker_connection.on('worker-identify', function(hostport) {

@@ -31,6 +31,7 @@ var monitor = new Swarm.Monitor({
         port: 6379
     },
     // Optional + defaults:
+    taskTimeout: 30000,
     checkTaskInterval: 15000,
     fetchWorkerInterval: 15000,
     partitionPercentage: 60

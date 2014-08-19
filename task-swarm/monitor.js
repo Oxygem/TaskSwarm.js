@@ -18,8 +18,10 @@ var Monitor = function(config) {
     this.type = 'monitor';
 
     // Defaults & set config
-    config.checkTaskInterval = config.checkTaskInterval || 30000,
-    config.fetchWorkerInterval = config.fetchWorkerInterval || 15000;
+    config.checkTaskInterval = config.checkTaskInterval || 15000,
+    config.fetchWorkerInterval = config.fetchWorkerInterval || 15000,
+    config.taskTimeout = config.taskTimeout || 15000,
+    config.partitionPercentage = config.partitionPercentage || 60;
     this.config = config;
 
     // Internal state
@@ -41,6 +43,7 @@ var Monitor = function(config) {
             this.redis_up = false;
             utils.pingAllWorkers.call(this, function(percentage) {
                 if(percentage < this.config.partitionPercentage) {
+                    utils.log.call(this, 'Not enough workers! Assuming network partition...');
                     this.paused = true; // stop checking tasks
                 }
             });
@@ -48,19 +51,106 @@ var Monitor = function(config) {
         utils.error.call(this, 'Redis Error', err);
     }.bind(this));
 
+    var requeueTask = function(task_id) {
+        utils.log.call(this, 'requing task...', task_id);
+        var task_key = 'task-' + task_id;
+
+        // Get the task data
+        this.redis.hget(task_key, ['data'], function(err, reply) {
+            var task_json = JSON.stringify(reply);
+
+            // Atomically remove task-id hash and push original task_data to new-task list
+            this.redis.multi()
+                .hdel(task_key, ['state', 'start', 'update', 'worker', 'data'])
+                .lpush('new-task', task_json)
+                .exec(function(err, reply) {
+                    utils.log.call(this, 'task requeued', task_id);
+                }.bind(this));
+        }.bind(this));
+    };
+
+    var removeTask = function(task_id) {
+        utils.log.call(this, 'removing task...', task_id);
+
+        // Atomically remove task-id hash and task_id list from tasks list
+        this.redis.multi()
+            .srem('tasks', task_id)
+            .hdel('task-' + task_id, ['state', 'start', 'update', 'worker', 'data'])
+            .exec(function(err, reply) {
+                utils.log.call(this, 'task removed', task_id);
+            }.bind(this));
+    };
+
+    // Move a task for manual cleanup
+    var moveEndTask = function(task_id) {
+        // Move off tasks into end-task, external must remove hashes
+        this.redis.multi()
+            .srem('tasks', task_id)
+            .sadd('end-task', task_id)
+            .exec(function(err, reply) {
+                utils.log.call(this, 'task moved to end queue', task_id);
+            }.bind(this));
+    };
+
+    var checkTasks = function(task_ids) {
+        utils.log.call(this, 'Checking tasks', task_ids);
+
+        // Loop each task, requeuing or removing as required
+        for(var i=0; i<task_ids.length; i++) {
+            (function(i) {
+                // Get task state and update
+                var task_id = task_ids[i];
+                this.redis.hmget('task-' + task_id, ['state', 'update', 'data'], function(err, reply) {
+
+                    var state = reply[0],
+                        update = reply[1],
+                        task_data = JSON.parse(reply[2]),
+                        data = JSON.parse(task_data.data);
+
+                    if(state != 'RUNNING') {
+                        utils.log.call(this, 'task state', task_id, state);
+
+                        // Requeue stopped
+                        if(state === 'STOPPED') {
+                            requeueTask.call(this, task_id);
+                        // Check update within time limit
+                        } else if(state === 'RUNNING') {
+                            var now = new Date().getTime();
+                            // Requeue if not
+                            if(now - update > this.config.taskTimeout) {
+                                requeueTask.call(this, task_id);
+                            }
+                        // Clean up
+                        } else if(state === 'END') {
+                            // If the task is to be manually cleaned up
+                            if(data.manual_end) {
+                                moveEndTask.call(this, task_id);
+                            } else {
+                                removeTask.call(this, task_id);
+                            }
+                        // Unknown state
+                        } else {
+                            // Log alien state
+                            utils.error.call(this, 'task in alien state', task_id);
+                        }
+                    }
+                }.bind(this));
+            }.bind(this))(i);
+        }
+    };
+
     var checkAllTasks = function() {
         if(this.paused) return;
 
         // Get all task ID's from Redis
         this.redis.smembers('tasks', function(err, reply) {
-            console.log(reply);
+            if(reply.length > 0)
+                checkTasks.call(this, reply);
         }.bind(this));
-
-        // Check each one, requeueing if dead
     };
 
     // Loops
-    setInterval(checkAllTasks.bind(this), config.checkTaskInterval);
+    setInterval(checkAllTasks.bind(this), this.config.checkTaskInterval);
     setInterval(utils.getWorkerList.bind(this), this.config.fetchWorkerInterval);
 
     utils.log.call(this, 'Monitor started!');
