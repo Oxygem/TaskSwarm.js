@@ -20,7 +20,7 @@ var Worker = function(config) {
     this.type = 'worker';
 
     // Defaults & set config
-    config.fetchTaskInterval = config.fetchTaskInterval || 1500,
+    config.fetchTaskInterval = config.fetchTaskInterval || 5000,
     config.fetchWorkerInterval = config.fetchWorkerInterval || 15000,
     config.partitionPercentage = config.partitionPercentage || 60;
     this.config = config;
@@ -61,9 +61,8 @@ var Worker = function(config) {
             this.redis_up = false;
             utils.pingAllWorkers.call(this, function(percentage) {
                 if(percentage < this.config.partitionPercentage) {
+                    utils.log.call(this, 'Not enough workers! Assuming network partition...');
                     this.stopAllTasks();
-                } else {
-                    utils.log.call(this, percentage + '% of workers accessible, not pausing');
                 }
             }.bind(this));
         }
@@ -191,7 +190,7 @@ var Worker = function(config) {
     };
 
     this.stopAllTasks = function() {
-        utils.log.call(this, 'stopping all tasks...');
+        utils.log.call(this, 'Stopping all tasks...');
         for(var key in this.tasks) {
             this.stopTask(key);
         }

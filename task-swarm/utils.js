@@ -91,9 +91,15 @@ var utils = {
 
         var tryComplete = function() {
             if((pongs + fails) == count) {
-                callback(((pongs + fails) / count) * 100);
+                var percent = (pongs / count) * 100;
+                utils.log.call(this,
+                    percent + '% workers accessible',
+                    '(' + pongs + ' pongs, ' + fails + ' fails)'
+                );
+
+                callback(percent);
             }
-        };
+        }.bind(this);
 
         var pingWorker = function(worker) {
             console.log('pinging', worker);
@@ -145,7 +151,7 @@ var utils = {
 
                 fails++;
                 tryComplete();
-            });
+            }.bind(this));
         }
     }
 };
