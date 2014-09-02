@@ -4,7 +4,6 @@
 
 'use strict';
 
-
 var net = require('net'),
     colors = require('colors'),
     netev = require('netev');
