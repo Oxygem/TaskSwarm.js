@@ -1,20 +1,31 @@
 # Task Swarm
 
-Swarm-like distributed tasks for Node. Any number of workers "swarming" a centralised Redis store with some auxiliary monitors keeping an eye on things. Ready to survive worker, Redis and monitor failure - and _somewhat_ resiliant to network partitions.
+Swarm-like distributed tasks for Node. Any number of workers "swarming" a centralised Redis store with some auxiliary monitors keeping an eye on things. Ready to survive worker, Redis and monitor failure - and _somewhat_ resiliant to network partitions. Tasks can generate events while in progress and these can be subscribed to.
 
 
 ## Synopsis
 
-**workers.js**
+Shared Redis config:
+
+```js
+var REDIS_CONFIG = {
+    host: 'localhost',
+    port: 6379,
+    // Optional + defaults
+    newQueue: 'new-task',
+    taskSet: 'tasks',
+    taskPrefix: 'task-',
+    endQueue: 'end-task'
+}
+```
+
+**workers.js** - fetches new tasks from Redis & excutes them:
 
 ```js
 var worker = new Swarm.Worker({
     host: 'localhost',
     port: 6000,
-    redis: {
-        host: 'localhost',
-        port: 6379
-    },
+    redis: REDIS_CONFIG,
     // Optional + defaults:
     fetchTaskInterval: 5000,
     fetchWorkerInterval: 15000,
@@ -22,19 +33,28 @@ var worker = new Swarm.Worker({
 });
 ```
 
-**monitor.js**
+**monitor.js** - monitors all running tasks and requeues if needed:
 
 ```js
 var monitor = new Swarm.Monitor({
-    redis: {
-        host: 'localhost',
-        port: 6379
-    },
+    redis: REDIS_CONFIG,
     // Optional + defaults:
     taskTimeout: 30000,
     checkTaskInterval: 15000,
     fetchWorkerInterval: 15000,
     partitionPercentage: 60
+});
+```
+
+**watcher.js** - used to subscribe to task events:
+
+```js
+var watcher = new Swarm.Watcher({
+    redis: REDIS_CONFIG
+});
+
+watcher.watch('task_id', 'event_name', function(data) {
+    console.log('task data for task_id/event_name: ', data);
 });
 ```
 
@@ -53,9 +73,11 @@ Checkout the `example/` directory for a full, ready-to-add-tasks-and-go example.
 
 ## Redis Data
 
+Defaults below, all keys configurable:
+
 + New tasks are pushed onto list/queue `new-task`
 + Active task id's in a set `tasks`
-+ Active task data in relevant hash `task-<task_id>` (`state`, `start`, `update`, `worker` & `data` keys)
++ Task data in relevant hash `task-<task_id>` (`state`, `start`, `update`, `worker` & `data` keys)
 + Ended tasks for manual cleanuo (hash remains) in set `end-task`
 
 
