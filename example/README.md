@@ -17,5 +17,6 @@ redis-server
 To input tasks, `telnet 6379` into Redis &:
 
 ```
-LPUSH new-task '{"id": "<task_id12>", "function": "test", "data": "{}"}'
+LPUSH new-task '{"id": "<task_id1>", "function": "test", "data": "{}"}'
+LPUSH new-task '{"id": "<task_id2>", "function": "test-long", "data": "{}"}'
 ```

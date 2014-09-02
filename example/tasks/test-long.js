@@ -10,19 +10,16 @@ module.exports = function(manager, data) {
 
     manager.log('timing out in ' + timeout);
 
-    // This task echos timeout! after an interval & stops, to be cleaned up
-    var end = setTimeout(function() {
+    // This task echos timeout! after intervals
+    var timer = setInterval(function() {
         manager.log('timeout!');
-        manager.emit('timeout');
-
-        // Notify task finished
-        self.emit('_end');
+        manager.emit('timeout', 'timeout!');
     }, timeout);
 
     // Stop when requested
     manager.on('stop', function() {
         // Stop task
-        clearTimeout(end);
+        clearTimeout(timer);
 
         // Notify stopped
         self.emit('_stop');
