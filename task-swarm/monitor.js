@@ -17,12 +17,13 @@ var Monitor = function(config) {
     this.paused = false;
     this.type = 'monitor';
 
-    // Defaults & set config
+    // Defaults
     config.checkTaskInterval = config.checkTaskInterval || 15000,
     config.fetchWorkerInterval = config.fetchWorkerInterval || 15000,
     config.taskTimeout = config.taskTimeout || 15000,
     config.partitionPercentage = config.partitionPercentage || 60;
-    this.config = config;
+    // Set Redis config
+    this.config = utils.redisConfig(config);
 
     // Internal state
     this.workers = [],
@@ -53,7 +54,7 @@ var Monitor = function(config) {
 
     var requeueTask = function(task_id) {
         utils.log.call(this, 'requing task...', task_id);
-        var task_key = 'task-' + task_id;
+        var task_key = this.config.redis.taskPrefix + task_id;
 
         // Get the task data
         this.redis.hget(task_key, ['data'], function(err, reply) {
@@ -62,7 +63,7 @@ var Monitor = function(config) {
             // Atomically remove task-id hash and push original task_data to new-task list
             this.redis.multi()
                 .hdel(task_key, ['state', 'start', 'update', 'worker', 'data'])
-                .lpush('new-task', task_json)
+                .lpush(this.config.newQueue, task_json)
                 .exec(function(err, reply) {
                     utils.log.call(this, 'task requeued', task_id);
                 }.bind(this));
@@ -74,8 +75,8 @@ var Monitor = function(config) {
 
         // Atomically remove task-id hash and task_id list from tasks list
         this.redis.multi()
-            .srem('tasks', task_id)
-            .hdel('task-' + task_id, ['state', 'start', 'update', 'worker', 'data'])
+            .srem(this.config.redis.taskSet, task_id)
+            .hdel(this.config.redis.taskPrefix + task_id, ['state', 'start', 'update', 'worker', 'data'])
             .exec(function(err, reply) {
                 utils.log.call(this, 'task removed', task_id);
             }.bind(this));
@@ -85,8 +86,8 @@ var Monitor = function(config) {
     var moveEndTask = function(task_id) {
         // Move off tasks into end-task, external must remove hashes
         this.redis.multi()
-            .srem('tasks', task_id)
-            .sadd('end-task', task_id)
+            .srem(this.config.reids.taskSet, task_id)
+            .lpush(this.config.redis.endQueue, task_id)
             .exec(function(err, reply) {
                 utils.log.call(this, 'task moved to end queue', task_id);
             }.bind(this));
@@ -100,7 +101,7 @@ var Monitor = function(config) {
             (function(i) {
                 // Get task state and update
                 var task_id = task_ids[i];
-                this.redis.hmget('task-' + task_id, ['state', 'update', 'data'], function(err, reply) {
+                this.redis.hmget(this.config.redis.taskPrefix + task_id, ['state', 'update', 'data'], function(err, reply) {
 
                     var state = reply[0],
                         update = reply[1],
@@ -143,7 +144,7 @@ var Monitor = function(config) {
         if(this.paused) return;
 
         // Get all task ID's from Redis
-        this.redis.smembers('tasks', function(err, reply) {
+        this.redis.smembers(this.config.redis.taskSet, function(err, reply) {
             if(reply.length > 0)
                 checkTasks.call(this, reply);
         }.bind(this));

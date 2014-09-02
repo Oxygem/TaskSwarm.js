@@ -15,31 +15,14 @@ var red = function(str) { return str.red; },
     green = function(str) { return str.green; };
 
 var utils = {
-    receiveUntil: function(stream, want, callback, options) {
-        var buffer = '';
+    redisConfig: function(config) {
+        // Redis defaults
+        config.redis.newQueue = config.redis.newQueue || 'new-task',
+        config.redis.taskSet = config.redis.taskSet || 'tasks',
+        config.redis.taskPrefix = config.redis.taskPrefix || 'task-',
+        config.redis.endQueue = config.redis.endQueue || 'end-task';
 
-        if(options.timeout) {
-            var timeout = setTimeout(function() {
-                stream.end();
-            }, options.timeout * 1000);
-        }
-
-        var onData = function(data) {
-            buffer += data.toString();
-            if(buffer.length >= want.length) {
-                if(buffer == want) {
-                    if(options.timeout)
-                        clearTimeout(timeout);
-
-                    stream.removeListener('data', onData);
-                    callback(stream);
-                } else {
-                    // Rejected!
-                    stream.end();
-                }
-            }
-        }
-        stream.on('data', onData);
+        return config;
     },
 
     log: function(action, data) {
@@ -102,8 +85,13 @@ var utils = {
         }.bind(this);
 
         var pingWorker = function(worker) {
-            console.log('pinging', worker);
-            worker.emit('ping');
+            try {
+                worker.emit('ping');
+            // Catch lost workers
+            } catch(e) {
+                fails++;
+                return tryComplete();
+            }
 
             var resultCallback = function() {
                 pongs++;
@@ -140,7 +128,6 @@ var utils = {
                 } else {
                     worker_connection.emit('monitor-identify');
                 }
-
 
                 // When we get their identify, ping
                 worker_connection.on('worker-identify', function(hostport) {

@@ -13,17 +13,16 @@ var net = require('net'),
 
 
 var Worker = function(config) {
-    var self = this;
-
     events.EventEmitter.call(this);
     this.log_prefix = '[Worker ' + config.host + ':' + config.port + '] ';
     this.type = 'worker';
 
-    // Defaults & set config
+    // Defaults
     config.fetchTaskInterval = config.fetchTaskInterval || 5000,
     config.fetchWorkerInterval = config.fetchWorkerInterval || 15000,
     config.partitionPercentage = config.partitionPercentage || 60;
-    this.config = config;
+    // Set Redis config
+    this.config = utils.redisConfig(config);
 
     // Internal state
     this.workers = [],
@@ -42,7 +41,7 @@ var Worker = function(config) {
         process.exit(1);
     }.bind(this));
     this.server.on('listening', function() {
-        utils.log.call(this, 'Listening for other workers', 'port ' + this.config.port);
+        utils.log.call(this, 'Listening for workers & watchers', 'port ' + this.config.port);
     }.bind(this));
 
     // Redis
@@ -69,7 +68,7 @@ var Worker = function(config) {
         utils.error.call(this, 'Redis Error', err);
     }.bind(this));
 
-    // Add another worker (which may also be a monitor!)
+    // Add another worker (which may also be a monitor/watcher!)
     var addWorker = function(stream) {
         // Immediately netev this!
         var worker = netev(stream, this.config.debug_netev, this.config.port);
@@ -87,13 +86,41 @@ var Worker = function(config) {
         }.bind(this));
 
         // Oh, you're not a worker but a monitor. Pings only!
-        worker.on('monitor-identify', function(hostport) {
+        worker.on('monitor-identify', function() {
+            worker.emit('worker-identify', this.config.host + ':' + this.config.port);
+
             // Reply to pings
             worker.on('ping', function() {
                 worker.emit('pong');
             });
+            utils.log.call(this, 'Monitor connected');
+        }.bind(this));
 
-            utils.log.call(this, 'Monitor connected: ' + hostport);
+        // Oh, actually looks like you're a watcher!
+        worker.on('watcher-identify', function() {
+            worker.emit('worker-identify', this.config.host + ':' + this.config.port);
+
+            // Subscribe to task events
+            worker.on('subscribe', function(task_id, event_name) {
+                if(!this.tasks[task_id]) {
+                    return worker.emit('no-task', task_id);
+                }
+
+                // Subscribe to the task, emit to worker
+                var subscriber = function() {
+                    var args = Array.prototype.slice.call(arguments, 0);
+                    args.unshift(task_id + event_name);
+                    try {
+                        worker.emit.apply(worker, args);
+                    // Catch lost workers
+                    } catch(e) {
+                        this.tasks[task_id].events.removeListener(event_name, subscriber);
+                        utils.log.call(this, 'Watcher lost', task_id, event_name);
+                    }
+                }.bind(this);
+                this.tasks[task_id].events.on(event_name, subscriber);
+            }.bind(this));
+            utils.log.call(this, 'Watcher connected');
         }.bind(this));
     };
 
@@ -115,20 +142,21 @@ var Worker = function(config) {
 
         // Create new 'process' object from task_functions
         // tasks are eventemitters, so we subscribe to it
-        var process = new this.task_functions[task.function](evs, task);
+        var process = new this.task_functions[task.function](evs, task),
+            task_key = this.config.redis.taskPrefix + task.id;
 
         // Subscribe to its _events
         process.on('_stop', function() {
             utils.log.call(this, 'task stopped', hostname, task.id);
             // Set state to STOPPED in Redis (distributor cleans up)
-            this.redis.hset('task-' + task.id, 'state', 'STOPPED');
+            this.redis.hset(task_key, 'state', 'STOPPED');
         }.bind(this));
         process.on('_update', function() {
-            this.redis.hset('task-' + task.id, 'update', new Date().getTime());
+            this.redis.hset(task_key, 'update', new Date().getTime());
         }.bind(this));
         process.on('_end', function() {
             utils.log.call(this, 'task ended', task.id);
-            this.redis.hset('task-' + task.id, 'state', 'END');
+            this.redis.hset(task_key, 'state', 'END');
         }.bind(this));
 
         // Store the task internally
@@ -142,7 +170,7 @@ var Worker = function(config) {
 
     // Check Redis for new tasks, prepare for worker
     var getNewTasks = function() {
-        this.redis.rpop('new-task', function(err, reply) {
+        this.redis.rpop(this.config.redis.newQueue, function(err, reply) {
             if(!reply) return;
             if(err)
                 return utils.error.call(this, err);
@@ -157,12 +185,12 @@ var Worker = function(config) {
                 return utils.error.call(this, 'invalid task', task_data);
             }
 
-            var task_key = 'task-' + task_data.id,
+            var task_key = this.config.redis.taskPrefix + task_data.id,
                 now = new Date().getTime();
 
             // Copy task_id into Redis list & task_data atomically
             this.redis.multi()
-                .sadd('tasks', task_data.id)
+                .sadd(this.config.redis.taskSet, task_data.id)
                 .hset(task_key, 'state', 'RUNNING')
                 .hset(task_key, 'start', now)
                 .hset(task_key, 'update', now)
