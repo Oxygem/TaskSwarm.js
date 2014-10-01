@@ -14,6 +14,8 @@ module.exports = function(manager, data) {
     var timer = setInterval(function() {
         manager.log('timeout!');
         manager.emit('timeout', 'timeout!');
+        // Update Redis to avoid task timeout
+        self.emit('_update');
     }, timeout);
 
     // Stop when requested
