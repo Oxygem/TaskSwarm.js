@@ -68,7 +68,7 @@ var Worker = function(config) {
         utils.error.call(this, 'Redis Error', err);
     }.bind(this));
 
-    // Add another worker (which may also be a monitor/watcher!)
+    // Add another worker (which may also be a monitor!)
     var addWorker = function(stream) {
         // Immediately netev this!
         var worker = netev(stream, this.config.debug_netev, this.config.port);
@@ -94,33 +94,6 @@ var Worker = function(config) {
                 worker.emit('pong');
             });
             utils.log.call(this, 'Monitor connected');
-        }.bind(this));
-
-        // Oh, actually looks like you're a watcher!
-        worker.on('watcher-identify', function() {
-            worker.emit('worker-identify', this.config.host + ':' + this.config.port);
-
-            // Subscribe to task events
-            worker.on('subscribe', function(task_id, event_name) {
-                if(!this.tasks[task_id]) {
-                    return worker.emit('no-task', task_id);
-                }
-
-                // Subscribe to the task, emit to worker
-                var subscriber = function() {
-                    var args = Array.prototype.slice.call(arguments, 0);
-                    args.unshift(task_id + event_name);
-                    try {
-                        worker.emit.apply(worker, args);
-                    // Catch lost workers
-                    } catch(e) {
-                        this.tasks[task_id].events.removeListener(event_name, subscriber);
-                        utils.log.call(this, 'Watcher lost', task_id, event_name);
-                    }
-                }.bind(this);
-                this.tasks[task_id].events.on(event_name, subscriber);
-            }.bind(this));
-            utils.log.call(this, 'Watcher connected');
         }.bind(this));
     };
 

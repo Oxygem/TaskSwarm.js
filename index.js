@@ -4,6 +4,5 @@
 
 module.exports = {
     Worker: require('./task-swarm/worker'),
-    Monitor: require('./task-swarm/monitor'),
-    Watcher: require('./task-swarm/watcher')
+    Monitor: require('./task-swarm/monitor')
 }

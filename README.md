@@ -2,6 +2,8 @@
 
 Swarm-like distributed tasks for Node. Any number of workers "swarming" a centralised Redis store with some auxiliary monitors keeping an eye on things. Ready to survive worker, Redis and monitor failure - and _somewhat_ resiliant to network partitions. Tasks can generate events while in progress and these can be subscribed to.
 
+Tasks can be controlled via Redis pub/sub, and task output events are pushed to pub/sub also.
+
 
 ## Synopsis
 
@@ -43,18 +45,6 @@ var monitor = new Swarm.Monitor({
     checkTaskInterval: 15000,
     fetchWorkerInterval: 15000,
     partitionPercentage: 60
-});
-```
-
-**watcher.js** - used to subscribe to task events:
-
-```js
-var watcher = new Swarm.Watcher({
-    redis: REDIS_CONFIG
-});
-
-watcher.watch('task_id', 'event_name', function(data) {
-    console.log('task data for task_id/event_name: ', data);
 });
 ```
 
