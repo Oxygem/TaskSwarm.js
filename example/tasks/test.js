@@ -1,10 +1,10 @@
 'use strict';
 
-var events = require('events'),
+var events2 = require('eventemitter2'),
     util = require('util');
 
 module.exports = function(manager, data) {
-    events.EventEmitter.call(this);
+    events2.EventEmitter2.call(this);
     var self = this,
         timeout = 10000 * Math.random();
 
@@ -13,7 +13,9 @@ module.exports = function(manager, data) {
     // This task echos timeout! after an interval & stops, to be cleaned up
     var end = setTimeout(function() {
         manager.log('timeout!');
-        manager.emit('timeout');
+
+        // Arbitrary pubsub emit
+        self.emit('testing', 'an argument');
 
         // Notify task finished
         self.emit('_end');
@@ -29,4 +31,4 @@ module.exports = function(manager, data) {
     });
 };
 
-util.inherits(module.exports, events.EventEmitter);
+util.inherits(module.exports, events2.EventEmitter2);

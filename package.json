@@ -7,7 +7,8 @@
     },
     "dependencies": {
         "netev": ">=0.9.4",
-        "redis": ">=0.10.0",
-        "colors": ">=0.6.2"
+        "haredis": ">=0.2.15",
+        "colors": ">=0.6.2",
+        "eventemitter2": ">=0.4.14"
     }
 }

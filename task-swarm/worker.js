@@ -132,6 +132,17 @@ var Worker = function(config) {
             this.redis.hset(task_key, 'state', 'END');
         }.bind(this));
 
+        // Push other events to Redis pubsub
+        var redis = this.redis;
+        process.onAny(function() {
+            // Skip any _events
+            if(this.event.lastIndexOf('_') === 0) return;
+
+            redis.publish(task_key, JSON.stringify({
+                event: this.event, data: arguments
+            }));
+        });
+
         // Store the task internally
         this.tasks[task.id] = {
             process: process,
@@ -188,6 +199,8 @@ var Worker = function(config) {
         // Send stop event to task
         task.events.emit('stop');
         utils.log.call(this, 'requested task stop', task_id);
+
+        // TODO: timeout to check if task has been stopped, if not kill it
     };
 
     this.stopAllTasks = function() {

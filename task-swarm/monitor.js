@@ -62,11 +62,11 @@ var Monitor = function(config) {
 
             // Atomically remove task-id hash and push original task_data to new-task list
             this.redis.multi()
-                .hdel(task_key, ['state', 'start', 'update', 'worker', 'data'])
-                .lpush(this.config.newQueue, task_json)
-                .exec(function(err, reply) {
-                    utils.log.call(this, 'task requeued', task_id);
-                }.bind(this));
+            .hdel(task_key, ['state', 'start', 'update', 'worker', 'data'])
+            .lpush(this.config.newQueue, task_json)
+            .exec(function(err, reply) {
+                utils.log.call(this, 'task requeued', task_id);
+            }.bind(this));
         }.bind(this));
     };
 
@@ -75,22 +75,22 @@ var Monitor = function(config) {
 
         // Atomically remove task-id hash and task_id list from tasks list
         this.redis.multi()
-            .srem(this.config.redis.taskSet, task_id)
-            .hdel(this.config.redis.taskPrefix + task_id, ['state', 'start', 'update', 'worker', 'data'])
-            .exec(function(err, reply) {
-                utils.log.call(this, 'task removed', task_id);
-            }.bind(this));
+        .srem(this.config.redis.taskSet, task_id)
+        .hdel(this.config.redis.taskPrefix + task_id, ['state', 'start', 'update', 'worker', 'data'])
+        .exec(function(err, reply) {
+            utils.log.call(this, 'task removed', task_id);
+        }.bind(this));
     };
 
     // Move a task for manual cleanup
     var moveEndTask = function(task_id) {
         // Move off tasks into end-task, external must remove hashes
         this.redis.multi()
-            .srem(this.config.reids.taskSet, task_id)
-            .lpush(this.config.redis.endQueue, task_id)
-            .exec(function(err, reply) {
-                utils.log.call(this, 'task moved to end queue', task_id);
-            }.bind(this));
+        .srem(this.config.reids.taskSet, task_id)
+        .lpush(this.config.redis.endQueue, task_id)
+        .exec(function(err, reply) {
+            utils.log.call(this, 'task moved to end queue', task_id);
+        }.bind(this));
     };
 
     var checkTasks = function(task_ids) {
