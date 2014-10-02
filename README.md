@@ -29,7 +29,7 @@ var worker = new Swarm.Worker({
     port: 6000,
     redis: REDIS_CONFIG,
     // Optional + defaults:
-    fetchTaskInterval: 5000,
+    fetchTaskInterval: 2000,
     fetchWorkerInterval: 15000,
     partitionPercentage: 60
 });
