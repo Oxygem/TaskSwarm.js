@@ -18,7 +18,7 @@ var Worker = function(config) {
     this.type = 'worker';
 
     // Defaults
-    config.fetchTaskInterval = config.fetchTaskInterval || 5000,
+    config.fetchTaskInterval = config.fetchTaskInterval || 2000,
     config.fetchWorkerInterval = config.fetchWorkerInterval || 15000,
     config.partitionPercentage = config.partitionPercentage || 60;
     // Set Redis config
@@ -132,12 +132,10 @@ var Worker = function(config) {
             this.redis.hset(task_key, 'state', 'END');
         }.bind(this));
 
+
         // Push other events to Redis pubsub
         var redis = this.redis;
         process.onAny(function() {
-            // Skip any _events
-            if(this.event.lastIndexOf('_') === 0) return;
-
             redis.publish(task_key, JSON.stringify({
                 event: this.event, data: arguments
             }));
@@ -149,6 +147,8 @@ var Worker = function(config) {
             events: evs
         };
 
+        // Start the task
+        evs.emit('start');
         utils.log.call(this, 'task added', task.id);
     };
 
