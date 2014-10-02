@@ -5,8 +5,7 @@ var events = require('events'),
 
 module.exports = function(manager, data) {
     events.EventEmitter.call(this);
-    var self = this,
-        timeout = 10000 * Math.random();
+    var timeout = 10000 * Math.random();
 
     manager.log('timing out in ' + timeout);
 
@@ -15,8 +14,8 @@ module.exports = function(manager, data) {
         manager.log('timeout!');
         manager.emit('timeout', 'timeout!');
         // Update Redis to avoid task timeout
-        self.emit('_update');
-    }, timeout);
+        this.emit('_update');
+    }.bind(this), timeout);
 
     // Stop when requested
     manager.on('stop', function() {
@@ -24,8 +23,8 @@ module.exports = function(manager, data) {
         clearTimeout(timer);
 
         // Notify stopped
-        self.emit('_stop');
-    });
+        this.emit('_stop');
+    }.bind(this));
 };
 
 util.inherits(module.exports, events.EventEmitter);

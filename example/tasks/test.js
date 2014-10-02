@@ -5,21 +5,25 @@ var events2 = require('eventemitter2'),
 
 module.exports = function(manager, data) {
     events2.EventEmitter2.call(this);
-    var self = this,
-        timeout = 10000 * Math.random();
+    var timeout = 10000 * Math.random();
 
-    manager.log('timing out in ' + timeout);
+    manager.on('start', function() {
+        manager.log('timing out in ' + timeout);
 
-    // This task echos timeout! after an interval & stops, to be cleaned up
-    var end = setTimeout(function() {
-        manager.log('timeout!');
+        // This task echos timeout! after an interval & stops, to be cleaned up
+        var end = setTimeout(function() {
+            manager.log('timeout!');
+
+            // Arbitrary pubsub emit
+            this.emit('testing', 'an argument');
+
+            // Notify task finished
+            this.emit('_end');
+        }.bind(this), timeout);
 
         // Arbitrary pubsub emit
-        self.emit('testing', 'an argument');
-
-        // Notify task finished
-        self.emit('_end');
-    }, timeout);
+        this.emit('start');
+    }.bind(this));
 
     // Stop when requested
     manager.on('stop', function() {
@@ -27,8 +31,8 @@ module.exports = function(manager, data) {
         clearTimeout(end);
 
         // Notify stopped
-        self.emit('_stop');
-    });
+        this.emit('_stop');
+    }.bind(this));
 };
 
 util.inherits(module.exports, events2.EventEmitter2);
