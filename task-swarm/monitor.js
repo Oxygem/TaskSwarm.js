@@ -7,7 +7,7 @@
 var net = require('net'),
     util = require('util'),
     events = require('events'),
-    redis = require('redis'),
+    redis = require('haredis'),
     utils = require('./utils.js');
 
 
