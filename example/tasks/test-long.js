@@ -1,10 +1,10 @@
 'use strict';
 
-var events = require('events'),
+var events2 = require('eventemitter2'),
     util = require('util');
 
 module.exports = function(manager, data) {
-    events.EventEmitter.call(this);
+    events2.EventEmitter2.call(this);
     var timeout = 10000 * Math.random();
 
     manager.on('start', function() {
@@ -29,4 +29,4 @@ module.exports = function(manager, data) {
     }.bind(this));
 };
 
-util.inherits(module.exports, events.EventEmitter);
+util.inherits(module.exports, events2.EventEmitter2);
