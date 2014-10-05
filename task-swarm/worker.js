@@ -152,8 +152,6 @@ var Worker = function(config) {
         // Subscribe to its _events
         process.on('_stop', function() {
             utils.log.call(this, 'Task stopped', task.id);
-            // Set state to STOPPED in Redis (distributor cleans up)
-            this.redis.hset(task_key, 'state', 'STOPPED');
         }.bind(this));
         process.on('_update', function() {
             this.redis.hset(task_key, 'update', new Date().getTime());

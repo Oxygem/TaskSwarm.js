@@ -53,32 +53,31 @@ var Monitor = function(config) {
     }.bind(this));
 
     var requeueTask = function(task_id) {
-        utils.log.call(this, 'requing task...', task_id);
+        utils.log.call(this, 'Requeueing task...', task_id);
         var task_key = this.config.redis.taskPrefix + task_id;
 
         // Get the task data
         this.redis.hget(task_key, ['data'], function(err, reply) {
-            var task_json = JSON.stringify(reply);
-
             // Atomically remove task-id hash and push original task_data to new-task list
             this.redis.multi()
+            .srem(this.config.redis.taskSet, task_id)
             .hdel(task_key, ['state', 'start', 'update', 'worker', 'data'])
-            .lpush(this.config.newQueue, task_json)
+            .lpush(this.config.redis.newQueue, reply)
             .exec(function(err, reply) {
-                utils.log.call(this, 'task requeued', task_id);
+                utils.log.call(this, 'Task requeued', task_id);
             }.bind(this));
         }.bind(this));
     };
 
     var removeTask = function(task_id) {
-        utils.log.call(this, 'removing task...', task_id);
+        utils.log.call(this, 'Removing task...', task_id);
 
         // Atomically remove task-id hash and task_id list from tasks list
         this.redis.multi()
         .srem(this.config.redis.taskSet, task_id)
         .hdel(this.config.redis.taskPrefix + task_id, ['state', 'start', 'update', 'worker', 'data'])
         .exec(function(err, reply) {
-            utils.log.call(this, 'task removed', task_id);
+            utils.log.call(this, 'Task removed', task_id);
         }.bind(this));
     };
 
@@ -89,7 +88,7 @@ var Monitor = function(config) {
         .srem(this.config.reids.taskSet, task_id)
         .lpush(this.config.redis.endQueue, task_id)
         .exec(function(err, reply) {
-            utils.log.call(this, 'task moved to end queue', task_id);
+            utils.log.call(this, 'Task moved to end queue', task_id);
         }.bind(this));
     };
 
@@ -108,32 +107,25 @@ var Monitor = function(config) {
                         task_data = JSON.parse(reply[2]),
                         data = JSON.parse(task_data.data);
 
-                    if(state != 'RUNNING') {
-                        utils.log.call(this, 'task state', task_id, state);
-
-                        // Requeue stopped
-                        if(state === 'STOPPED') {
+                    // Check update within time limit
+                    if(state === 'RUNNING') {
+                        var now = new Date().getTime();
+                        // Requeue if not
+                        if(now - update > this.config.taskTimeout) {
                             requeueTask.call(this, task_id);
-                        // Check update within time limit
-                        } else if(state === 'RUNNING') {
-                            var now = new Date().getTime();
-                            // Requeue if not
-                            if(now - update > this.config.taskTimeout) {
-                                requeueTask.call(this, task_id);
-                            }
-                        // Clean up
-                        } else if(state === 'END') {
-                            // If the task is to be manually cleaned up
-                            if(data.manual_end) {
-                                moveEndTask.call(this, task_id);
-                            } else {
-                                removeTask.call(this, task_id);
-                            }
-                        // Unknown state
-                        } else {
-                            // Log alien state
-                            utils.error.call(this, 'task in alien state', task_id);
                         }
+                    // Clean up
+                    } else if(state === 'END') {
+                        // If the task is to be manually cleaned up
+                        if(data.manual_end) {
+                            moveEndTask.call(this, task_id);
+                        } else {
+                            removeTask.call(this, task_id);
+                        }
+                    // Unknown state
+                    } else {
+                        // Log alien state
+                        utils.error.call(this, 'Task in alien state', task_id);
                     }
                 }.bind(this));
             }.bind(this))(i);
