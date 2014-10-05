@@ -63,12 +63,15 @@ Checkout the `example/` directory for a full, ready-to-add-tasks-and-go example.
 
 ## Redis Data
 
-Defaults below, all keys configurable:
+Defaults below, all keys/prefixes configurable:
 
 + New tasks are pushed onto list/queue `new-task`
 + Active task id's in a set `tasks`
 + Task data in relevant hash `task-<task_id>` (`state`, `start`, `update`, `worker` & `data` keys)
-+ Ended tasks for manual cleanuo (hash remains) in set `end-task`
+    * `state` = `RUNNING` or `END`
++ Ended tasks for manual cleanup (hash remains) in set `end-task`
++ Task events are published under channel `task-<task_id>-events`
++ Workers listen for task control under channel `task-<task_id>-control`
 
 
 ## Failover/HA/Fault-Tolerance Notes
