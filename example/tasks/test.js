@@ -5,13 +5,14 @@ var events2 = require('eventemitter2'),
 
 module.exports = function(manager, data) {
     events2.EventEmitter2.call(this);
-    var timeout = 10000 * Math.random();
+    var timeout = 10000 * Math.random(),
+        end;
 
     manager.on('start', function() {
         manager.log('timing out in ' + timeout);
 
         // This task echos timeout! after an interval & stops, to be cleaned up
-        var end = setTimeout(function() {
+        end = setTimeout(function() {
             manager.log('timeout!');
 
             // Arbitrary pubsub emit

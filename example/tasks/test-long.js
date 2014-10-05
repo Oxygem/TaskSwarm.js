@@ -5,13 +5,14 @@ var events2 = require('eventemitter2'),
 
 module.exports = function(manager, data) {
     events2.EventEmitter2.call(this);
-    var timeout = 10000 * Math.random();
+    var timeout = 10000 * Math.random(),
+        timer;
 
     manager.on('start', function() {
         manager.log('timing out in ' + timeout);
 
         // This task echos timeout! after intervals
-        var timer = setInterval(function() {
+        timer = setInterval(function() {
             manager.log('timeout!');
             manager.emit('timeout', 'timeout!');
             // Update Redis to avoid task timeout
