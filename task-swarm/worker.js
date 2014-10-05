@@ -7,8 +7,9 @@
 var net = require('net'),
     events = require('events'),
     util = require('util'),
-    redis = require('redis'),
+    redis = require('haredis'),
     netev = require('netev'),
+    Promise = require('promise'),
     utils = require('./utils.js');
 
 
@@ -66,6 +67,36 @@ var Worker = function(config) {
             }.bind(this));
         }
         utils.error.call(this, 'Redis Error', err);
+        if(typeof err == 'object') console.log(err.stack);
+    }.bind(this));
+
+    // On pubsub messages: externally control tasks
+    this.redis.on('message', function(channel, message) {
+        // Slice the start & end of the channel to get the task_id
+        var task_id = channel.slice(this.config.redis.taskPrefix.length, -8);
+
+        // No such task?
+        if(!this.tasks[task_id])
+            return utils.error.call(this, 'Invalid task control request: ' + task_id + ', message: ' + message);
+
+        // Task control: stop
+        if(message == 'stop') {
+            this.stopTask(task_id);
+        // Task control: reload (from task-data in task hash)
+        } else if(message == 'reload') {
+            this.reloadTask(task_id);
+        // Task control: JSON event (sent to task)
+        } else if(message.indexOf('{') == 0) {
+            try {
+                data = JSON.parse(message);
+                if(!data.event_name || !data.event)
+                    return utils.error.call(this, 'Missing task control event name or data', data);
+                // Pass to our task
+                this.tasks[task_id].events.emit(data.event_name, data.event);
+            } catch(e) {
+                utils.error.call(this, 'Invalid task control JSON: ' + e);
+            }
+        }
     }.bind(this));
 
     // Add another worker (which may also be a monitor!)
@@ -120,7 +151,7 @@ var Worker = function(config) {
 
         // Subscribe to its _events
         process.on('_stop', function() {
-            utils.log.call(this, 'task stopped', hostname, task.id);
+            utils.log.call(this, 'Task stopped', task.id);
             // Set state to STOPPED in Redis (distributor cleans up)
             this.redis.hset(task_key, 'state', 'STOPPED');
         }.bind(this));
@@ -128,15 +159,17 @@ var Worker = function(config) {
             this.redis.hset(task_key, 'update', new Date().getTime());
         }.bind(this));
         process.on('_end', function() {
-            utils.log.call(this, 'task ended', task.id);
+            utils.log.call(this, 'Task ended', task.id);
             this.redis.hset(task_key, 'state', 'END');
         }.bind(this));
 
+        // Subscribe to Redis pubsub for external task control
+        this.redis.subscribe(task_key + '-control');
 
         // Push other events to Redis pubsub
         var redis = this.redis;
         process.onAny(function() {
-            redis.publish(task_key, JSON.stringify({
+            redis.publish(task_key + '-events', JSON.stringify({
                 event: this.event, data: arguments
             }));
         });
@@ -163,10 +196,10 @@ var Worker = function(config) {
             try {
                 task_data = JSON.parse(reply);
             } catch(e) {
-                return utils.error.call(this, 'invalid task JSON', reply);
+                return utils.error.call(this, 'Invalid task JSON', reply);
             }
             if(!task_data.id || !task_data.function || !task_data.data) {
-                return utils.error.call(this, 'invalid task', task_data);
+                return utils.error.call(this, 'Invalid task', task_data);
             }
 
             var task_key = this.config.redis.taskPrefix + task_data.id,
@@ -189,18 +222,55 @@ var Worker = function(config) {
 
     this.addTaskFunction = function(task_name, object) {
         this.task_functions[task_name] = object;
-        utils.log.call(this, 'task added', task_name);
+        utils.log.call(this, 'Task function added', task_name);
+    };
+
+    this.reloadTask = function(task_id) {
+        var task = this.tasks[task_id];
+        if(!task) return false;
+        utils.log.call(this, 'Reloading task', task_id);
+
+        // Stop the task
+        this.stopTask(task_id).then(function() {
+            // When stopped, this.addTask w/ data from Redis hset
+            this.redis.hget(this.config.redis.taskPrefix + task_id, 'data', function(err, reply) {
+                var data = JSON.parse(reply);
+                addTask.call(this, data);
+            }.bind(this));
+        }.bind(this));
     };
 
     this.stopTask = function(task_id) {
         var task = this.tasks[task_id];
         if(!task) return false;
+        utils.log.call(this, 'Stopping task', task_id);
+
+        // Create a promise to return
+        var taskHasStopped = new Promise(function(resolve, reject) {
+            var timeout, wrapper;
+
+            // Reject if not stopped in 5s
+            timeout = setTimeout(function() {
+                this.tasks[task_id].process.removeListener('_stop', wrapper);
+                reject();
+            }.bind(this), 5000);
+
+            // Wrapper around resolve
+            wrapper = function() {
+                clearTimeout(timeout);
+                this.tasks[task_id].process.removeListener('_stop', wrapper);
+                resolve();
+            }.bind(this);
+
+            // Subscribe to task's _stop
+            this.tasks[task_id].process.on('_stop', wrapper);
+        }.bind(this));
 
         // Send stop event to task
         task.events.emit('stop');
-        utils.log.call(this, 'requested task stop', task_id);
 
-        // TODO: timeout to check if task has been stopped, if not kill it
+        // Return our promise
+        return taskHasStopped;
     };
 
     this.stopAllTasks = function() {
